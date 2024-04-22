@@ -14,35 +14,13 @@ for (package in packages) {
 # load packages
 lapply(packages, library, character.only = TRUE)
 
-# cores<- detectCores()
-# cl <- makeCluster(cores-4)
-# clusterEvalQ(cl, {
-#   library(terra)
-#   library(sf) 
-#   library(plyr) 
-#   library(mapaccuracy) 
-#   library(sampling) 
-#   library(sp) 
-#   library(mapview)
-#   library(foreach) 
-#   library(osmdata) 
-#   library(tidyverse) 
-#   library(spData) 
-#   library(dplyr) 
-#   library(fs) 
-#   library(raster) 
-#   library(exactextractr)
-#   library(readxl) 
-#   library(rasterize) 
-#   library(stars) 
-#   library(rgdal)
-#   library(tidyterra) 
-#   library(RColorBrewer)
-# })
 
-my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\OSM data" 
+# Setting directory for Open street map data
+my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design 
+of Urban Spaces\\Project Data\\OSM data" 
 setwd(my_dir)
 
+# Loading open street map data of area 
 osmBuilding <- st_read("gis_osm_buildings_a_fre_Clip.shp") # use for masking but nothing else
 osmVegetation <- st_read("gis_osm_natural_free_1_Clip.shp") # use for tree location
 osmRecAreas <- st_read("gis_osm_pois_a_free_1_Clip.shp") # use for design location -> design function
@@ -52,13 +30,13 @@ osmParking <- st_read("gis_osm_traffic_a_free__Clip.shp") #use for roads
 osmStreetMarkers <- st_read("gis_osm_traffic_free_1_Clip.shp") #use for masking
 osmBusStops <- st_read("gis_osm_transport_free__Clip.shp") #use for masking
 
+# Create list for SF object on all OSM data (No longer used)
+# geometry list
 osmGeo <- c(osmBuilding$geometry, osmVegetation$geometry, osmRecAreas$geometry, 
             osmMiscServicesAndPlaces$geometry, osmRoads$geometry, 
             osmParking$geometry,osmStreetMarkers$geometry, osmBusStops$geometry)
-# osmGeoRd <- c(osmRoads$geometry,osmParking$geometry)
-# osmClassRd <- rep("Road", length(osmRoads$geometry)+length(osmParking$geometry))
-# osmTypeRd <- c(osmRoads$fclass,osmParking$fclass)
 
+# class list
 osmClass <- c(rep("Building",length(osmBuilding$geometry)), 
                  rep("Tree",length(osmVegetation$geometry)), 
                  rep("Rec Area",length(osmRecAreas$geometry)), 
@@ -68,63 +46,99 @@ osmClass <- c(rep("Building",length(osmBuilding$geometry)),
                  rep("Street marker",length(osmStreetMarkers$geometry)), 
                  rep("Bus stop",length(osmBusStops$geometry))) 
 
+# data on type of respective data
 osmTypeData <- c(osmBuilding$type, osmVegetation$fclass, osmRecAreas$fclass,
                     osmMiscServicesAndPlaces$fclass, osmRoads$fclass, 
                     osmParking$fclass, osmStreetMarkers$fclass, 
                     osmBusStops$fclass)
 
-osmData <- st_sf(class=unlist(osmClass),details=unlist(osmTypeData),geometry=osmGeo)
+# Create SF object with all OSM data gathered for this project
+osmData <- st_sf(class=unlist(osmClass),details=unlist(osmTypeData),
+                 geometry=osmGeo)
+
+# Create SF object for road OSM data
 osmRoads_sf <- st_sf(class=rep("Road", length(osmRoads$geometry)), 
                      details=osmRoads$fclass, geometry=osmRoads$geometry)
+
+# Create SF object for building OSM data
 osmBuilding_sf <- st_sf(class=osmBuilding$fclass, details=osmBuilding$type, 
                         geometry=osmBuilding$geometry)
 # osmRoads_sf <- st_sf(class=osmClassRd, details=unlist(osmTypeRd), geometry=osmGeoRd)
 
 
-my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data" 
+# Set working directory to main directory with all the shape files to be used
+my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design 
+of Urban Spaces\\Project Data" 
 setwd(my_dir)
 
-# Area of Study
+# Area of Study (De Buurt)
+# Read Shape file
 area_of_study  <- st_read("PA_Neighbourhoods_Select.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, and priority 
+# level)
+# Since this object is just defining the limits, the greenspace generation 
+# parameters are not necessary
 area_of_study_sf <- st_sf(class="Study Area", 
                           areaName=area_of_study$wijknaam,
                           scores=0, illegal_gs=FALSE, 
                           interventionType="Unknown",
                           priority=0,
                           geometry=area_of_study$geometry)
+# Vectorize SF object
 area_of_study_V <- vect(area_of_study_sf)
-convCRS <- crs(vect(area_of_study))
-crs(area_of_study_V) <- convCRS
 
+# Grab coordinate reference frame (CRS) of study area to be used as CRS for all 
+# objects to be studied
+convCRS <- crs(vect(area_of_study))
+# crs(area_of_study_V) <- convCRS
+
+# Set CRS of all OSM data to match study area
 osmData <- st_transform(osmData, st_crs(area_of_study))
 osmRoads_sf <- st_transform(osmRoads_sf, st_crs(area_of_study))
 osmBuilding_sf <- st_transform(osmBuilding_sf, st_crs(area_of_study))
 
-# natural_map <- rast('NaturalMapV1.tif')
+# Load precipitation data for 100 and 1000 year storm events, and crop them to 
+# the study area
 precip_100Yr <- rast('PA_KEA_WaterDepthIntensePrecipitation_1_100years.tif')
 precip_100Yr <- crop(precip_100Yr, area_of_study, mask= T)
 precip_1000Yr <- rast('PA_KEA_WaterDepthIntensePrecipitation_1_1000Years.tif')
 precip_1000Yr <- crop(precip_1000Yr, area_of_study, mask= T)
-full_map <- rast("C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\studyArea_unclipped.tif")
+# full_map <- rast("C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\studyArea_unclipped.tif")
+# Set CRS 
 crs(precip_100Yr) <- convCRS
 crs(precip_1000Yr) <- convCRS
 
-tree_list <- read.csv("C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\Tree_data\\tableTrees2.csv")
+# Load CSV with all the trees in the area and their respective counts
+tree_list <- read.csv("C:\\Users\\alek-\\Documents\\Wageningen Period 
+                      5\\Planning and Design of Urban Spaces\\Project 
+                      Data\\Tree_data\\tableTrees2.csv")
 
-tree_details_path = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\Tree_data\\Data_All_Trees_v1.xlsx"
+# Path to document with all the data on all the trees
+tree_details_path = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning 
+and Design of Urban Spaces\\Project Data\\Tree_data\\Data_All_Trees_v1.xlsx"
 
+# Get the names for all the trees used in data xlsx file - note the names are 
+# sometimes shorter than those in the tree list due to them being cutoff
 tree_names <- excel_sheets(tree_details_path)
-i = 0
+
+# For loop to get all the details per tree from the document
 tree_details <- list()
-for (tree in tree_names)
+for (i in 1:length(tree_names))
 {
-  i = i + 1
   tree_details[[i]] <- read_excel(tree_details_path, sheet = i)
 }
 
+# Assign name per item in tree details list so that this can be used for any 
+# type of tree analysis (this was not used for this project)
 names(tree_details) <- tree_names
 
+# Trees in De Buurt
+# Read Shape file
 trees_shp <- st_read("Bomen_Clip.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 trees_sf <- st_sf(
   class=rep("Tree", length(trees_shp$geometry)),
   # id=trees_shp$link,
@@ -139,10 +153,16 @@ trees_sf <- st_sf(
   gsWidth=rep(1, length(trees_shp$geometry)),
   geometry=trees_shp$geometry
 )
+# Vectorize and set correct CRS
 trees_V <- vect(trees_sf)
 crs(trees_V) <- convCRS
 
+# Sewer lines in De Buurt
+# Read Shape file
 sewers_system  <- st_read("sewers_clipped.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 sewers_system_sf <- st_sf( class=rep("Sewer", length(sewers_system$geometry)),
                            material=sewers_system$MATERIAAL, 
                            systemType=sewers_system$STELSELTYP,
@@ -154,34 +174,44 @@ sewers_system_sf <- st_sf( class=rep("Sewer", length(sewers_system$geometry)),
                            design=rep("Shallow Root Vegetation", length(sewers_system$geometry)),
                            gsWidth=rep(2, length(sewers_system$geometry)),
                            geometry=sewers_system$geometry)
+# Vectorize and set correct CRS
 sewers_system_V <- vect(sewers_system_sf)
 crs(sewers_system_V) <- convCRS
+
+# copy vector for sewer system mask used in Masking stage then pass copy into a
+# For loop to generate a buffer around all the sewer lines to be used for 
+# masking, first convert geometry to lines then generate a buffer around lines
 sewers_systemBufferV <- sewers_system_V
-
-
 for (i in 1:length(sewers_system_sf$geometry))
 {
-  sewers_systemBufferV[i] <- buffer(sewers_systemBufferV[i], sewers_system_sf$gsWidth[i])
-  # mv_linesBufferV[i] <- buffer(waterlines_V[i], waterlines_sf$gsWidth[i])
-  
+  buff <- as.lines(sewers_systemBufferV[i])
+  sewers_systemBufferV[i] <- buffer(buff, sewers_system_sf$gsWidth[i])
 }
+
+# Convert buffer vector to SF object and set correct CRS
 sewers_systemBuffer_sf <- st_as_sf(sewers_systemBufferV)
 sewers_systemBuffer_sf <- st_set_crs(sewers_systemBuffer_sf, st_crs(area_of_study))
 
+# Save all useful data from buffer object to mask SF object
 sewers_systemMask_sf <- st_sf(design=sewers_systemBuffer_sf$design, 
                        priority=sewers_systemBuffer_sf$priority, 
                        scores=sewers_systemBuffer_sf$scores, 
                        illegal_gs=sewers_systemBuffer_sf$illegal_gs,
                        geometry=sewers_systemBuffer_sf$geometry)
-
+# Vectoize SF Object and set CRS
 sewers_systemMaskV <- vect(sewers_systemMask_sf)
 crs(sewers_systemMaskV) <- convCRS
 
-# TODO dsefine rain gardens based on rain
+
+# Percent of greenspace that is private property in De Buurt with buildings 
+# masked out
+# Read Shape file
 greenspace_percent_private <- st_read("Private_greenShade.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 green_percent_private_sf <- st_sf(
   class=rep("Private Greenspace Percentage", length(greenspace_percent_private$geometry)),
-  # id=greenspace_percent_private$perceelnum,
   Percentage=greenspace_percent_private$Percentage,
   scores=greenspace_percent_private$Percentage * 0.5,
   illegal_gs=rep(FALSE, length(greenspace_percent_private$geometry)),
@@ -191,6 +221,7 @@ green_percent_private_sf <- st_sf(
   gsWidth=rep(1, length(greenspace_percent_private$geometry)),
   geometry=greenspace_percent_private$geometry
   )
+# Vectoize SF Object and set CRS
 green_percent_private_V <- vect(green_percent_private_sf)
 crs(green_percent_private_V) <- convCRS
 
@@ -220,7 +251,7 @@ for (i in 1:length(green_percent_private_sf$geometry))
     green_percent_private_V$design[i] <- "Garden"
   } else
   {
-    green_percent_private_V$design[i] <- "Remove tiled Garden"
+    green_percent_private_V$design[i] <- "Remove tiled garden"
     
   }
 
@@ -229,12 +260,13 @@ for (i in 1:length(green_percent_private_sf$geometry))
 green_percent_private_sf <- st_as_sf(green_percent_private_V)
 green_percent_private_sf <- st_set_crs(green_percent_private_sf, 
                                        st_crs(area_of_study))
-# greenspace_pct_private_sf <- st_collection_extract(green_percent_private_sf, "POLYGON")
 
+# Percent of greenspace that is public property in De Buurt with buildings 
+# masked out
+# Read Shape file
 greenspace_percent_public  <- st_read("Municipal_Green_shade.shp")
 green_percent_public_sf <- st_sf(
   class=rep("Public Greenspace Percentage", length(greenspace_percent_public$geometry)),
-  # id=greenspace_percent_public$perceelnum,
   Percentage=greenspace_percent_public$Percentage,
   scores=greenspace_percent_public$Percentage * 0.5,
   illegal_gs=rep(FALSE, length(greenspace_percent_public$geometry)),
@@ -244,6 +276,7 @@ green_percent_public_sf <- st_sf(
   gsWidth=rep(1, length(greenspace_percent_public$geometry)),
   geometry=greenspace_percent_public$geometry
 )
+# Vectoize SF Object and set CRS
 green_percent_public_V <- vect(green_percent_public_sf)
 crs(green_percent_public_V) <- convCRS
 
@@ -264,7 +297,7 @@ for (i in 1:length(green_percent_public_sf$geometry))
   greenPub_PctRain <- greenPub_PctRain[!is.na(greenPub_PctRain)]
   greenPub_PctRain <- max(greenPub_PctRain)
   
-  if (grepl("Wadi", green_percent_public_V$design[i]))
+  if (grepl("Bioswale", green_percent_public_V$design[i]))
   {
     if ((greenPub_PctRain >= 4) & 
         (drop_units(st_area(green_percent_public_sf$geometry[i])) < 300))
@@ -273,10 +306,10 @@ for (i in 1:length(green_percent_public_sf$geometry))
     } else if ((greenPub_PctRain > 1) & 
                (drop_units(st_area(green_percent_public_sf$geometry[i])) < 500))
     {
-      green_percent_public_V$design[i] <- "Wadi"
+      green_percent_public_V$design[i] <- "Bioswale"
     } else
     {
-      green_percent_public_V$design[i] <- "Shrubs"
+      green_percent_public_V$design[i] <- "Trees, plants, and/or shrubs"
       
     }
   } else if ((greenPub_PctRain >= 4) & 
@@ -286,7 +319,7 @@ for (i in 1:length(green_percent_public_sf$geometry))
   } else if ((greenPub_PctRain > 1) & 
              (drop_units(st_area(green_percent_public_sf$geometry[i])) < 500))
   {
-    green_percent_public_V$design[i] <- "Wadi"
+    green_percent_public_V$design[i] <- "Bioswale"
   }
 }
 green_percent_public_sf <- st_as_sf(green_percent_public_V)
@@ -294,6 +327,8 @@ green_percent_public_sf <- st_set_crs(green_percent_public_sf,
                                        st_crs(area_of_study))
 
 
+# Already existing greenspace in De Buurt
+# Read Shape file
 green_areas <- st_read("main_CLIPPED_PlantCoverAreas.shp")
 
 # TODO define raingarden based on rain
@@ -302,7 +337,7 @@ defGreenAreas <- function(plntTypes)
   if (grepl("bodembedekkers", plntTypes))
   {
     typeP <- "Ground cover"
-    design <- "Wadi and shrubs"
+    design <- "Bioswale and shrubs"
     width <- 0.5
   }else if (grepl("bosplantsoen", plntTypes))
   {
@@ -312,7 +347,7 @@ defGreenAreas <- function(plntTypes)
   }else if (grepl("gras- en kruidachtigen", plntTypes))
   {
     typeP <- "Grasses and herbs"
-    design <- "Wadi and shrubs"
+    design <- "Bioswale and shrubs"
     width <- 1
   }else if (grepl("heesters", plntTypes))
   {
@@ -345,18 +380,21 @@ for (i in 1:length(green_areas$geometry))
   dsgGSL[[length(dsgGSL)+1]] <- plnTp[[2]]
   GSWidthL[[length(GSWidthL)+1]] <- plnTp[[3]]
 }
-
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 green_areas_sf <- st_sf(
   class=rep("Greenspace", length(green_areas$geometry)),
   plant_types=unlist(plntTypeL),
   scores=rep(100, length(green_areas$geometry)),
   illegal_gs=rep(FALSE, length(green_areas$geometry)),
   interventionType=rep("Full", length(green_areas$geometry)),
-  priority=rep(6,length(green_areas$geometry)),
+  priority=rep(8,length(green_areas$geometry)),
   design=unlist(dsgGSL),#rep("Trees, plants, and/or shrubs", length(green_areas$geometry)),
   gsWidth=unlist(GSWidthL),
   geometry=green_areas$geometry
 )
+# Vectoize SF Object and set CRS
 green_areas_V <- vect(green_areas_sf)
 crs(green_areas_V) <- convCRS
 
@@ -377,7 +415,10 @@ for (i in 1:length(green_areas_sf$geometry))
   green_areasRain <- green_areasRain[!is.na(green_areasRain)]
   green_areasRain <- max(green_areasRain)
   
-  if (grepl("Wadi", green_areas_V$design[i]))
+  if (grepl("Forest", green_areas_V$design[i]))
+  {
+   next 
+  } else if (grepl("Bioswale", green_areas_V$design[i]))
   {
     if ((green_areasRain >= 4) & 
         (drop_units(st_area(green_areas_sf$geometry[i])) < 300))
@@ -386,10 +427,10 @@ for (i in 1:length(green_areas_sf$geometry))
     } else if ((green_areasRain > 1) & 
                (drop_units(st_area(green_areas_sf$geometry[i])) < 500))
     {
-      green_areas_V$design[i] <- "Wadi"
+      green_areas_V$design[i] <- "Bioswale"
     } else
     {
-      green_areas_V$design[i] <- "Shrubs"
+      green_areas_V$design[i] <- "Trees, plants, and/or shrubs"
       
     }
   } else if ((green_areasRain >= 4) & 
@@ -399,7 +440,7 @@ for (i in 1:length(green_areas_sf$geometry))
   } else if ((green_areasRain > 1) & 
              (drop_units(st_area(green_areas_sf$geometry[i])) < 400))
   {
-    green_areas_V$design[i] <- "Wadi"
+    green_areas_V$design[i] <- "Bioswale"
   }
 }
 
@@ -408,6 +449,10 @@ green_areas_sf <- st_set_crs(green_areas_sf, st_crs(area_of_study))
 
 
 mv_lines <- st_read("main_CLIPPED_Electricity_Mediumvoltage_Lines.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge) added later. This
+# was due to how the MV Lines object wwas converted 
 mv_lines_sf <- st_as_sf(mv_lines)
 mv_lines_sf$id <- NULL
 mv_lines_sf$class <- rep("Medium Voltage Line", length(mv_lines$geometry))
@@ -417,32 +462,44 @@ mv_lines_sf$interventionType<-rep("None", length(mv_lines$geometry))
 mv_lines_sf$priority<-rep(10, length(mv_lines$geometry))
 mv_lines_sf$design<-rep("Shallow Root Vegetation", length(mv_lines$geometry))
 mv_lines_sf$gsWidth<-rep(1.5,length(mv_lines$geometry))
+
+# Vectorize and set CRS
 mv_lines_V <- vect(mv_lines_sf)
 crs(mv_lines_V) <- convCRS
-mv_linesBufferV <- mv_lines_V
 
+# copy vector for MV Lines mask used in Masking stage then pass copy into a
+# For loop to generate a buffer around all the sewer lines to be used for 
+# masking, first convert geometry to lines then generate a buffer around lines
+mv_linesBufferV <- mv_lines_V
 for (i in 1:length(mv_lines_sf$geometry))
 {
-  mv_linesBufferV[i] <- buffer(mv_linesBufferV[i], mv_lines_sf$gsWidth[i])
+  buff <- as.lines(mv_linesBufferV[i])
+  mv_linesBufferV[i] <- buffer(buff, mv_lines_sf$gsWidth[i])
 }
+
+# Convert buffer vector to SF object and set correct CRS
 mv_linesBuffer_sf <- st_as_sf(mv_linesBufferV)
 mv_linesBuffer_sf <- st_set_crs(mv_linesBuffer_sf, st_crs(green_areas))
 
+# Save all useful data from buffer object to mask SF object
 mv_linesMask_sf <- st_sf(design=mv_linesBuffer_sf$design, 
                            priority=mv_linesBuffer_sf$priority, 
                            scores=mv_linesBuffer_sf$scores, 
                            illegal_gs=mv_linesBuffer_sf$illegal_gs,
                            geometry=mv_linesBuffer_sf$geometry)
 
+# Vectoize SF Object and set CRS
 mv_linesMaskV <- vect(mv_linesMask_sf)
 crs(mv_linesMaskV) <- convCRS
 
 
 historic_areas <- st_read("Gem Wageningen_historic.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 historic_areas <- st_transform(historic_areas, st_crs(green_areas))
 historic_areas_sf <- st_sf(
   class=rep("Historic Area", length(historic_areas$geometry)),
-  # id = historic_areas$osm_id,
   buildings=historic_areas$building,
   scores=rep(20, length(historic_areas$geometry)),
   illegal_gs=rep(TRUE, length(historic_areas$geometry)),
@@ -458,53 +515,66 @@ historic_areas_V <- vect(historic_areas_sf)
 crs(historic_areas_V) <- convCRS
 
 openWater <- st_read("top10_water_Clip.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 openWater <- st_set_crs(openWater, st_crs(green_areas))
 openWater_sf <- st_sf(
   class=rep("Open water", length(openWater$geometry)),
-  # id = openWater$lokaalID,
   waterType=openWater$typeWater,
   scores=rep(50,length(openWater$geometry)),
-  illegal_gs=rep(FALSE, length(openWater$geometry)),
+  illegal_gs=rep(TRUE, length(openWater$geometry)),
   interventionType=rep("Edge", length(openWater$geometry)),
   priority=rep(8,length(openWater$geometry)),
   design=rep("Rain Garden", length(openWater$geometry)),
   gsWidth=rep(1.5,length(openWater$geometry)),
   geometry=openWater$geometry
 )
+# Vectoize SF Object and set CRS
 openWater_V <- vect(openWater_sf)
 crs(openWater_V) <- convCRS
 
 waterlines <- st_read("top10_water_lines_Clip.shp")
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 waterlines <- st_set_crs(waterlines, st_crs(green_areas))
 waterlines_sf <- st_sf(
   class=rep("Waterline", length(waterlines$geometry)),
-  # id=waterlines$lokaalID,
   scores=rep(20,length(waterlines$geometry)),
   illegal_gs=rep(FALSE, length(waterlines$geometry)),
   interventionType=rep("None", length(waterlines$geometry)),
   priority=rep(10,length(waterlines$geometry)),
-  design=rep("Shallow Root Vegetation", length(waterlines$geometry)),
+  design=rep("None", length(waterlines$geometry)),
   gsWidth=rep(1.5,length(waterlines$geometry)),
   geometry=waterlines$geometry
 )
+# Vectorize and set CRS
 waterlines_V <- vect(waterlines_sf)
 crs(waterlines_V) <- convCRS
+# copy vector for waterlines mask used in Masking stage then pass copy into a
+# For loop to generate a buffer around all the sewer lines to be used for 
+# masking, first convert geometry to lines then generate a buffer around lines
 waterlinesBufferV <- waterlines_V
-
 for (i in 1:length(waterlines_sf$geometry))
 {
-  waterlinesBufferV[i] <- buffer(waterlinesBufferV[i], waterlines_sf$gsWidth[i])
+  buff <- as.lines(waterlinesBufferV[i])
+  waterlinesBufferV[i] <- buffer(buff, waterlines_sf$gsWidth[i])
   
 }
+
+# Convert buffer vector to SF object and set correct CRS
 waterlinesBuffer_sf <- st_as_sf(waterlinesBufferV)
 waterlinesBuffer_sf <- st_set_crs(waterlinesBuffer_sf, st_crs(green_areas))
 
+# Save all useful data from buffer object to mask SF object
 waterlinesMask_sf <- st_sf(design=waterlinesBuffer_sf$design, 
                             priority=waterlinesBuffer_sf$priority, 
                             scores=waterlinesBuffer_sf$scores, 
                             illegal_gs=waterlinesBuffer_sf$illegal_gs,
                             geometry=waterlinesBuffer_sf$geometry)
 
+# Vectoize SF Object and set CRS
 waterlinesMaskV <- vect(waterlinesMask_sf)
 crs(waterlinesMaskV) <- convCRS
 
@@ -536,27 +606,15 @@ landClassScores <- function(landClass)
   return(list(score, intType, priority, design))
 }
 
-# landClassLegality <- function(landClass)
-# {
-#   if (grepl(landClass, "grasland", ignore.case = TRUE) | 
-#       grepl(landClass, "bos: loofbos", ignore.case = TRUE))
-#   {
-#     illegality = FALSE
-#   }
-#   else
-#   {
-#     illegality = TRUE
-#   }
-#   return(illegality)
-# }
+
 
 landClassScoreList <- list()
 landIntTypesL <- list()
 landClassPriorityList <- list()
 landClassDesignL <- list()
-# landClassIllegalityList <- list()
 land_class <- st_read("top10_terrain_Clip.shp")
 land_class <- st_set_crs(land_class, st_crs(green_areas))
+
 for (class in land_class$typeLandge)
 {
   scoreAndPrior <- landClassScores(class)
@@ -564,15 +622,15 @@ for (class in land_class$typeLandge)
   inTy <- scoreAndPrior[[2]]
   prior <- scoreAndPrior[[3]]
   desg <- scoreAndPrior[[4]]
-  # illegal <- landClassLegality(class)
   landClassScoreList[[length(landClassScoreList)+1]] <- score
   landIntTypesL[[length(landIntTypesL)+1]] <- inTy
   landClassPriorityList[[length(landClassPriorityList)+1]] <- prior
   landClassDesignL[[length(landClassDesignL)+1]] <- desg
-  # landClassIllegalityList[[length(landClassIllegalityList)+1]] <- illegal
 }
 
-
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 land_class_sf <- st_sf(
   class=rep("Land use class", length(land_class$geometry)),
   # id=land_class$lokaalID,
@@ -586,11 +644,11 @@ land_class_sf <- st_sf(
   geometry=land_class$geometry
 )
 
+# Vectoize SF Object and set CRS
 land_class_V <- vect(land_class_sf)
 crs(land_class_V) <- convCRS
 
-# land_class_sf$scores<-landClassScoreList
-# land_class_sf$illegal_gs<-landClassIllegalityList
+
 roads <- st_read("top10_roads_Clip.shp")
 roads <- st_set_crs(roads, st_crs(green_areas))
 
@@ -646,14 +704,15 @@ roadIntervention <- function(roadUse, roadType)
       grepl("bus", roadUse, ignore.case = TRUE)) & 
       !grepl("gemengd", roadUse, ignore.case = TRUE))
   {
-    illegality = TRUE
     interventionType = "Edge"
     if (!grepl("bus", roadUse, ignore.case = TRUE))
     {
-      design="Wadi and shrubs"
+      illegality = FALSE
+      design="Trees, plants, and/or shrubs"
       priority=10
     }else
     {
+      illegality = TRUE
       design="Trees, plants, and/or shrubs"
       priority=8
     }
@@ -662,12 +721,12 @@ roadIntervention <- function(roadUse, roadType)
     illegality = FALSE
     interventionType = "Edge"
     priority=7
-    design="Wadi and shrubs"  #"Trees, plants, and/or shrubs"
+    design="Trees, plants, and/or shrubs"
   }else if (grepl("parkeerplaats",roadType))
   {
     illegality = FALSE
     interventionType = "Full"
-    priority=0
+    priority=6
     design="Permeable pavement"
   }else
   {
@@ -734,10 +793,11 @@ for (i in 1:length(vehicles))
   roadwidthGS[[length(roadwidthGS)+1]] <- rdW
 }
 
-
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 roads_sf <- st_sf(
   class=rep("Road", length(roads$geometry)),
-  # id=roads$lokaalID,
   infrastructureType=roads$typeInfras,
   roadType=roads$typeWeg,
   trafficType=roads$hoofdverke,
@@ -749,6 +809,7 @@ roads_sf <- st_sf(
   gsWidth=unlist(roadwidthGS),
   geometry=roads$geometry
 )
+# Vectoize SF Object and set CRS
 roads_V <- vect(roads_sf)
 crs(roads_V) <- convCRS
 
@@ -810,6 +871,7 @@ for (i in 1:length(osmRoads_sf$geometry))
   illegalL[[length(illegalL)+1]] <- rdMsk[[5]]
 }
 
+# Save all useful data into buffer object for OSM road data to mask SF object
 osmRoadsBuffer_sf <- st_sf(class=osmRoads_sf$class, typeRoad=osmRoads_sf$details, 
                          design=unlist(designL), gsWidth=unlist(maskWL), 
                          priority=unlist(priorL), scores=unlist(scoreL),
@@ -819,24 +881,31 @@ osmRoadsBuffer_sf <- st_set_crs(osmRoadsBuffer_sf, st_crs(green_areas))
 
 osmRoadsV <- vect(osmRoadsBuffer_sf)
 crs(osmRoadsV) <- convCRS
+
+# copy vector for OSM roads mask used in Masking stage then pass copy into a
+# For loop to generate a buffer around all the sewer lines to be used for 
+# masking, first convert geometry to lines then generate a buffer around lines
 osmRoadsBufferV <- osmRoadsV
 crs(osmRoadsBufferV) <- convCRS
-
 for (i in 1:length(osmRoadsBuffer_sf$geometry))
 {
-  osmRoadsBufferV[i] <- buffer(osmRoadsBufferV[i], osmRoadsBuffer_sf$gsWidth[i])
+  buff <- as.lines(osmRoadsBufferV[i])
+  osmRoadsBufferV[i] <- buffer(buff, osmRoadsBuffer_sf$gsWidth[i])
   
 }
 
+# Convert buffer vector back to SF object and set correct CRS
 osmRoadsBuffer_sf <- st_as_sf(osmRoadsBufferV)
 osmRoadsBuffer_sf <- st_set_crs(osmRoadsBuffer_sf, st_crs(green_areas))
 
+# Save all useful data from buffer object to mask SF object
 osmRoadsMask_sf <- st_sf(design=osmRoadsBuffer_sf$design, 
                          priority=osmRoadsBuffer_sf$priority,
                          scores=osmRoadsBuffer_sf$scores, 
                          illegal_gs=osmRoadsBuffer_sf$illegal_gs, 
                          geometry=osmRoadsBuffer_sf$geometry) 
 osmRoadsMask_sf <- st_set_crs(osmRoadsMask_sf, st_crs(green_areas))
+# Vectoize SF Object and set CRS
 osmRoadsMaskV <- vect(osmRoadsMask_sf)
 crs(osmRoadsMaskV) <- convCRS
 
@@ -902,7 +971,7 @@ parkingClassification <- function(class,name)
     score <- 70
     illegal <- FALSE
     intType <- "Full"
-    prior <- 6
+    prior <- 8
     dsgn <- "Permeable pavement"
     width <- 0.5
   }else
@@ -933,7 +1002,9 @@ for (i in 1:length(osmParking$geometry))
   dsgnParkL[[length(dsgnParkL)+1]] <- parkingInfo[5]
   widthParkL[[length(widthParkL)+1]] <- parkingInfo[6]
 }
-
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 osmParking_sf <- st_sf(class=rep("Parking", length(osmParking$geometry)), 
                        details=osmParking$fclass, 
                        scores=unlist(scoreParkL),
@@ -945,6 +1016,7 @@ osmParking_sf <- st_sf(class=rep("Parking", length(osmParking$geometry)),
                        geometry=osmParking$geometry)
 osmParking_sf <- st_transform(osmParking_sf, st_crs(area_of_study))
 
+# Vectoize SF Object and set CRS
 osmParking_V <- vect(osmParking_sf)
 crs(osmParking_V) <- convCRS
 
@@ -952,8 +1024,7 @@ crs(osmParking_V) <- convCRS
 
 
 
-# roads_sf$scores=unlist(roadScoresList)
-# roads_sf$illegal_gs=unlist(roadIllegalityList)
+
 buildings <- st_read("top10_buildings_Clip.shp")
 buildings <- st_set_crs(buildings, st_crs(green_areas))
 buildingPrior <- function(buildHeight, buildClass)
@@ -998,7 +1069,9 @@ for (i in 1:length(buildClass))
   typeRoofL[[length(typeRoofL)+1]] <- prior[[3]]
   buildGSWidth[[length(buildGSWidth)+1]] <- prior[[4]]
 }
-
+# Create SF object with the details of interest as well as greenspace generation
+# parameters (scores, illegal greenspace flag, intervention type, priority 
+# level, design type, and the width of buffer/greenspace edge)
 buildings_sf <- st_sf(
   class=rep("Building", length(buildings$geometry)),
   # id=buildings$lokaalID,
@@ -1015,12 +1088,14 @@ buildings_sf <- st_sf(
   geometry=buildings$geometry
 )
 
+# Vectoize SF Object and set CRS
 buildings_V <- vect(buildings_sf)
 crs(buildings_V) <- convCRS
 
 # defineBuildingMask <- function
 
 
+# Vectoize SF Object and set CRS
 osmBuilding_V <- vect(osmBuilding_sf)
 crs(osmBuilding_V) <- convCRS
 
@@ -1076,9 +1151,11 @@ for (i in 1:length(buildings_V))
     }
   }
 }
+# Vectoize SF Object and set CRS
 buildings_V <- vect(buildings_sf)
 crs(buildings_V) <- convCRS
 
+# Vectoize SF Object and set CRS
 osmBuildingMaskV <- vect(osmBuildingMask_sf)
 crs(osmBuildingMaskV) <- convCRS
 
@@ -1144,8 +1221,10 @@ shp_keys <- c("study area", "trees", "sewer system",
               "buildings")
 
 # Set classes and have it separate between private and public
-greenscape_replacement_classes <- c("permeable", "edge intervention", "shrubs", "trees", "vertical")
-greenspace_design <- c("wadi", "rain garden", "permeable pavement", "Vertical garden", "living wall")
+greenscape_replacement_classes <- c("permeable", "edge intervention", "shrubs", 
+                                    "trees", "vertical")
+greenspace_design <- c("bioswale", "rain garden", "permeable pavement", 
+                       "Vertical garden", "living wall")
 extent_intervention <- c("full","partial", "edge", "none", "unknown")
 
 # Name the list of shapes, geometries, and 
@@ -1192,14 +1271,14 @@ defineContainment <- function(polyVFocus, polyVCheck, focusID, checkID)
   }
   else if (grepl("Roads", polyVCheck$class))
   {
-    if (grepl("fietsers", polyVCheck$hoofdverke, ignore.case = TRUE))
-    {
+    # if (grepl("fietsers", polyVCheck$hoofdverke, ignore.case = TRUE))
+    # {
       categ <- paste(polyVCheck$hoofdverke,polyVCheck$typeWeg,":")
-    }
-    else
-    {
-      categ <- polyVCheck$typeWeg
-    }
+    # }
+    # else
+    # {
+    #   categ <- polyVCheck$typeWeg
+    # }
   }
   else if (grepl("Tree", polyVCheck$class))
   {
@@ -1263,6 +1342,7 @@ defineContainment <- function(polyVFocus, polyVCheck, focusID, checkID)
 proximitySearch <- function(poly, polID, dataset, dist, priority, typeConv,
                             desgn, width=1, class="None")
 {
+  # print("Called")
   if (class == "None")
   {
     dataVect <- vect(dataset)
@@ -1291,10 +1371,22 @@ proximitySearch <- function(poly, polID, dataset, dist, priority, typeConv,
   # nrbyPol <- unname(nearbyPoly)
   # print(is.empty(nearbyPoly[,1]))
   # print(nrbyPol[,1])
+  if (length(nearbyPoly) == 0)
+  {
+    stop("There were no polygons nearby")
+  }
+  
+  
   polyID <- try(nearbyPoly[1,2])
   if(inherits(polyID, "try-error"))
   {
     #error handling code, maybe just skip this iteration using
+    # print(nearbyPoly)
+    print("Poly length")
+    print(length(nearbyPoly))
+    # blep <- summary(nearbyPoly)
+    # print(blep)
+    # print(nearbyPoly[1])
     stop("No nearby polygons")
   }
   
@@ -1328,7 +1420,7 @@ proximitySearch <- function(poly, polID, dataset, dist, priority, typeConv,
     if(inherits(id, "try-error"))
     {
       
-      if(id == lenNBP)
+      if(id >= lenNBP)
       #error handling code, maybe just skip this iteration using
       {
         stop("No nearby polygons found")
@@ -1341,13 +1433,37 @@ proximitySearch <- function(poly, polID, dataset, dist, priority, typeConv,
     
     dstnc <- distance(polyV, dataVect[id])
     
-    if (all(dataset[id,] == dataset[prevID,]) & (id != 1))
+    if (id != 1)
     {
-      priorL[[length(priorL)]] <- priorL[[length(priorL)]]+1
-      next
-      # Use this statement to ensure that only polygons (outside of polygon of interest) are within
-      # acceptable distance as defined by the dist parameter. 
-    } else if (dstnc > dist)
+      sameDataset <- try(identical(dataVect[id],dataVect[prevID]))
+      
+      # print(length(dataVect))
+      
+      if(is.na(sameDataset))
+      {
+        print(dataVect[id]) 
+        print(id)
+        print(dataset[id,])
+        print(prevID)
+        print(dataset[prevID,])
+      }
+      
+      if(inherits(sameDataset, "try-error"))
+      {
+        stop("Cannot compare same datasets")
+      }
+      
+      if (sameDataset)
+      {
+        priorL[[length(priorL)]] <- priorL[[length(priorL)]]+1
+        next
+        # Use this statement to ensure that only polygons (outside of polygon of interest) are within
+        # acceptable distance as defined by the dist parameter. 
+      }
+      
+    } 
+    
+    if (dstnc > dist)
     {
       next
     }
@@ -1454,7 +1570,7 @@ rdV <- vect(rdEx)
 crs(rdV) <- convCRS
 # dataVect <- vect(green_areas_sf)
 
-proxData <- proximitySearch(poly=rdEx, polID=497, dataset=green_areas_sf, dist=5, priority=2, typeConv="Edge", desgn="Trees, plants, and/or shrubs")
+# proxData <- proximitySearch(poly=rdEx, polID=497, dataset=green_areas_sf, dist=5, priority=2, typeConv="Edge", desgn="Trees, plants, and/or shrubs")
 
 derivePoly <- function(x_np, y_np, crd, scl, w, grad, isMin, isX, len)
 {
@@ -1886,13 +2002,36 @@ defineEdge <- function(x_np, y_np, bisectVect, priority, doubleProp, dist,
     {
       polX <- crop(bisectVect,polX)
       polY <- crop(bisectVect,polY)
-    } #else if (onlyOuter)
-    # {
-    #   polMaskX <- crop(bisectVect,polX)
-    #   polMaskY <- crop(bisectVect,polY)
-    #   polX <- polX - polMaskX#, inverse=TRUE)
-    #   polY <- polY - polMaskY#, inverse=TRUE)
-    # }
+    } else if (onlyOuter)
+    {
+      polMaskX <- crop(bisectVect,polX)
+      polMaskY <- crop(bisectVect,polY)
+      polDiffX <- try(polX - polMaskX)#, inverse=TRUE)
+      polDiffY <- try(polY - polMaskY)#, inverse=TRUE)
+      
+      if((inherits(polDiffX, "try-error")) & (inherits(polDiffY, "try-error")))
+      {
+        #error handling code, maybe just skip this iteration using
+        stop("Cannot derive edge")
+      }else if (inherits(polDiffX, "try-error"))
+      {
+        x_side <- FALSE
+        if (!y_side)
+        {
+          stop("Cannot derive edge")
+        }
+        doubleSided <- FALSE
+      }else if (inherits(polDiffY, "try-error"))
+      {
+        y_side <- FALSE
+        if (!x_side)
+        {
+          stop("Cannot derive edge")
+        }
+        doubleSided <- FALSE
+      }
+      
+    }
     
     crs(polX) <- convCRS
     
@@ -1914,7 +2053,7 @@ defineEdge <- function(x_np, y_np, bisectVect, priority, doubleProp, dist,
     if (geomtype(polX) == geomtype(polY))
     {
       polyout <- union(polX,polY)
-      polyouy <- union(polyout)
+      # polyout <- union(polyout)
     } else
       if (expanse(polX) > expanse(polY))
     {
@@ -1939,19 +2078,19 @@ defineEdge <- function(x_np, y_np, bisectVect, priority, doubleProp, dist,
 }
 
 #example code
-x_nearP <- proxData$nearestPointsX[1]
-y_nearP <- proxData$nearestPointsY[1]
-biVect <- rdV
-prior <- proxData$priority[1]
-doubleProp <- 0.3
-dist <- proxData$distFromPoly[1]
-maxD <- 5
-width <- 1
-
-edgePoly<-defineEdge(x_np=x_nearP, y_np=y_nearP, bisectVect=biVect, 
-                     priority=prior, doubleProp=doubleProp, dist=dist, 
-                     maxD=maxD, width=width, onlyLongest=FALSE, full=FALSE, sidePref=0, 
-                     yside=0, xside=0, onlyOuter=TRUE)
+# x_nearP <- proxData$nearestPointsX[1]
+# y_nearP <- proxData$nearestPointsY[1]
+# biVect <- rdV
+# prior <- proxData$priority[1]
+# doubleProp <- 0.3
+# dist <- proxData$distFromPoly[1]
+# maxD <- 5
+# width <- 1
+# 
+# edgePoly<-defineEdge(x_np=x_nearP, y_np=y_nearP, bisectVect=biVect, 
+#                      priority=prior, doubleProp=doubleProp, dist=dist, 
+#                      maxD=maxD, width=width, onlyLongest=FALSE, full=FALSE, sidePref=0, 
+#                      yside=0, xside=0, onlyOuter=TRUE)
 
 # plot(rdV, col="grey")
 # plot(edgePoly, col="green", add=TRUE)
@@ -2020,6 +2159,7 @@ conversionGS <- function(dataset, searchDist)
   mvLinesDone <- FALSE
   waterLinesDone <- FALSE
   openWaterDone <- FALSE
+  buildingsDone <- FALSE
   
   idList <- list()
   dsgList <- list()
@@ -2027,6 +2167,7 @@ conversionGS <- function(dataset, searchDist)
   gsList <- list()
   gsScoreList <- list()
   illegalL<- list()
+  clsList <- list()
   prevClass <- dataset$class[1]
   polID <- 0
   startIdx <- 0
@@ -2036,6 +2177,7 @@ conversionGS <- function(dataset, searchDist)
   {
     # Removing first row for simplification purposes
     # data <- data[-1,]
+    
     print("Poly:")
     print(i)
     print("Class:")
@@ -2050,7 +2192,7 @@ conversionGS <- function(dataset, searchDist)
       prevClass <- dataset$class[i]
       startIdx <- i-1
     }
-    
+    plot
     polID <- i - startIdx
     
     geoV <- chooseVect(dataset$class[i])
@@ -2062,12 +2204,16 @@ conversionGS <- function(dataset, searchDist)
     dsgnL <- list()
     # print("Vect Outer")
     gsGeo <- vect(dataset$geometry[i])
+    
+
+    # }
     # print("Vect Outer Success")
     crs(gsGeo) <- convCRS
     gsDesign <- dataset$design[i]
     # geoV <- chooseVect(dataset$class[i])
     
     if ((grepl("Tree", dataset$class[i]) & !treesDone) |
+        (grepl("Building",dataset$class[i]) & !buildingsDone) |
         (grepl("Sewer",dataset$class[i]) & !sewerDone) |
         (grepl("Medium Voltage Line",dataset$class[i]) & !mvLinesDone) |
         (grepl("Waterline", dataset$class[i]) & !waterLinesDone) |
@@ -2077,18 +2223,25 @@ conversionGS <- function(dataset, searchDist)
       if (grepl("Tree",dataset$class[i]))
       {
         treesDone = TRUE
-      }else if (grepl("Sewer",dataset$class[i]))
+      } else if (grepl("Building",dataset$class[i]))
+      {
+        buildingsDone = TRUE
+      }else if (grepl("Sewer",dataset$class[i])) #add an as lines section here
       {
         sewerDone = TRUE
+        geoV <- as.lines(geoV)
       } else if (grepl("Medium Voltage Line",dataset$class[i]))
       {
         mvLinesDone = TRUE
+        geoV <- as.lines(geoV)
       } else if (grepl("Waterline",dataset$class[i]))
       {
         waterLinesDone = TRUE
+        geoV <- as.lines(geoV)
       } else if (grepl("Open water",dataset$class[i]))
       {
         openWaterDone = TRUE
+        geoV <- as.lines(geoV)
       }
       
       gsV <- buffer(geoV, dataset$gsWidth[i])
@@ -2101,10 +2254,12 @@ conversionGS <- function(dataset, searchDist)
         gsList[length(gsList)+1] <- CurrSF$geometry[k]
         gsScoreList[[length(gsScoreList)+1]] <- CurrSF$scores[k]
         illegalL[[length(illegalL)+1]] <- CurrSF$illegal_gs[k]
+        clsList[[length(clsList) + 1]] <- CurrSF$class[k]
       }
 
       next
     }else if((grepl("Tree", dataset$class[i]) & treesDone) |
+             (grepl("Building",dataset$class[i]) & buildingsDone) |
              (grepl("Sewer",dataset$class[i]) & sewerDone) |
              (grepl("Medium Voltage Line",dataset$class[i]) & mvLinesDone) |
              (grepl("Waterline", dataset$class[i]) & waterLinesDone) |
@@ -2113,10 +2268,18 @@ conversionGS <- function(dataset, searchDist)
       next
     }
     
-    if (grepl("None", dataset$design[i]))
-    {
-      next
-    }
+    # if (grepl("None", dataset$design[i]))
+    # {
+    #   next
+    # }
+    
+    # if (grepl("Road",dataset$class[i]))
+    # {
+    #   if (grepl("parkeer",dataset$roadType[i]))
+    #   {
+    #     next
+    #   }
+    # }
     
     # print("Finding Nearby Poly")
     nearbyPolyList <- list()
@@ -2132,31 +2295,36 @@ conversionGS <- function(dataset, searchDist)
     for (cls in genClassList)
     {
       # print("Hola")
-      if (cls != dataset$class[i])
+      # if (cls != dataset$class[i])
+      # {
+      # print("proximity class check")
+      # print(cls)
+      # 
+      # # if (!grepl("Sewer",cls) & !grepl("Medium Voltage Line",cls) &
+      #     !grepl("Waterline", cls)) #|!(grepl("Road",dataset$class[i]) & grepl("Building",cls)))
+      # {
+
+      nrbyPol <- try(proximitySearch(
+        poly=dataset$geometry[i],dataset=data, dist=searchDist, polID = polID,
+        priority = dataset$priority[i],typeConv = dataset$interventionType[i], 
+        desgn = dataset$design[i], width = dataset$gsWidth[i], class = cls))
+    
+      if(inherits(nrbyPol, "try-error"))
       {
-        nrbyPol <- try(proximitySearch(
-          poly=dataset$geometry[i],dataset=data, dist=searchDist, polID = polID,
-          priority = dataset$priority[i],typeConv = dataset$interventionType[i], 
-          desgn = dataset$design[i], width = dataset$gsWidth[i], class = cls))
-        
-        if(inherits(nrbyPol, "try-error"))
-        {
-          #error handling code, maybe just skip this iteration using
-          next
-        }else
-        {
-          nearbyPolyList[[length(nearbyPolyList)+1]] <- nrbyPol
-        }
-        
-        
+        #error handling code, maybe just skip this iteration using
+        next
+      }else
+      {
+        nearbyPolyList[[length(nearbyPolyList)+1]] <- nrbyPol
       }
+        
     }
     
     nearbyPolData <- bind_rows(nearbyPolyList)
     
     # print("Found nearby Poly")
     
-    if (length(nearbyPolData) < 10)
+    if (length(nearbyPolyList) == 0)
     {
       next
     }
@@ -2164,14 +2332,49 @@ conversionGS <- function(dataset, searchDist)
     
     for (j in 1:length(nearbyPolData$geometry))
     {
+      
+      # if (i == 33)
+      # # {
+      print("i:")
+      #   print("We here")
+      print(i)
+      print("j:")
+      print(j)
+      print(nearbyPolData$class[j])
+      # print("NearbyPoly length")
+
+      # print((nearbyPolData[j]))
+      print(nearbyPolData$geometry[j])
+
+      # if (length(nearbyPolData$geometry == 0))
+      # {
+      #   print("Skip")
+      #   next
+      # }
+        
+        # 
+        # print("road type")
+        # print(dataset$roadType[i])
+        # print(nearbyPolData$details[j])
+        # print(nearbyPolData$details[j])
+        # print(nearbyPolData$scores[j])
+        # print(nearbyPolData$design[j])
+        # print(nearbyPolData$priority[j])
+        # }
+      
+      
       if ((grepl("Study Area",nearbyPolData$class[j]) | 
           grepl("None", nearbyPolData$design[j])) & (j != 1))
       {
         next
-      }
+      } 
+      
+      containedFlg <- (grepl("Contained",nearbyPolData$typeContainment[j]) | 
+        grepl("Overlap", nearbyPolData$typeContainment[j])) 
+      
       
       if (grepl("Road",dataset$class[i]) & 
-          # grepl("Wadi and shrubs",dataset$design[i])) &
+          # grepl("bioswale and shrubs",dataset$design[i])) &
           (grepl("lokale weg",nearbyPolData$details[j]) |
            grepl("hoofdweg",nearbyPolData$details[j]) |
            grepl("regionale weg",nearbyPolData$details[j]) | 
@@ -2179,26 +2382,62 @@ conversionGS <- function(dataset, searchDist)
       {
         onlyLong <- TRUE
         full <- TRUE
-        onlyIn <- FALSE
+        onlyIn <- TRUE
         # width = max(0.5,width*0.5)
+        # if (i == 33)
+        # {
+          # print("We here inside")
+        # }
         
+      
       }else
       {
         onlyLong <- FALSE
         full <- FALSE
         onlyIn <- FALSE
         # width=max(1,width)
+        # if (i == 33)
+        # {
+          # print("We here my lords")
+        # }
+        
+        
+        
       }
       
       if (dataset$illegal_gs[i])
       {
         onlyOuter = TRUE
+        # if (i == 33)
+        # {
+          print("We here outside")
+        # }
+        
       }else
       {
         onlyOuter = FALSE
+        
+        # if (i == 33)
+        # {
+          # print("We are in fact not outside")
+        # }
+        
       }
       
+      # if (i == 33)
+      # {
+      #   print("Priority:")
+      #   print(dataset$priority[i])
+      # }
+      # 
       score_scale <- (nearbyPolData$priority[j]/dataset$priority[i])
+      
+      # if (i == 33)
+      # {
+      #   print("SCORE:")
+      #   print(score_scale)
+      # }
+      
       # print("Generating greenspace")
       
       if (grepl("Full",dataset$interventionType[i]))
@@ -2224,9 +2463,10 @@ conversionGS <- function(dataset, searchDist)
             gsList[length(gsList)+1] <- geoN$geometry
             gsScoreList[[length(gsScoreList)+1]] <- dataset$scores[i]
             illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+            clsList[[length(clsList)+1]] <- dataset$class[i]
           # }
         }
-        print("Generating greenspace full")
+        # print("Generating greenspace full")
         
         # if (grepl("Greenspace", nearbyPolData$class[j]) | grepl("Tree", nearbyPolData$class[j]))
         # {
@@ -2237,14 +2477,26 @@ conversionGS <- function(dataset, searchDist)
         # }
         ar <- drop_units(st_area(nearbyPolData$geometry[j]))
         
-        if( grepl("Contained",nearbyPolData$typeContainment[j]) | #grepl(nearbyPolData$typeContainment[j], "Container") |
-           grepl("Overlap", nearbyPolData$typeContainment[j]) ) 
+        # if (i == 33)
+        # {
+          # print("We here my lords, calculating area")
+        # }
+        
+        
+        if(containedFlg) 
         {
+          
+          # if (i == 33)
+          # # {
+          #   print("We here my lords, contained")
+          # # }
+          
           # dst <- ar/drop_units(st_perimeter(nearbyPolData$geometry[j]))
           # inDesign <- nearbyPolData$design[j]
-          print("Vect Contained")
+          # print("Vect Contained")
           geoV <- vect(nearbyPolData$geometry[j])
           crs(geoV) <- convCRS
+          # geoVConv <- as.lines(geoV)
           geoNV <- buffer(geoV, nearbyPolData$gsWidth[j])
           geoN <- st_as_sf(geoNV)
           # geoN <- geoN$geometry
@@ -2261,6 +2513,8 @@ conversionGS <- function(dataset, searchDist)
             gsScoreList[[length(gsScoreList)+1]] <- min(nearbyPolData$scores[j] * 
                                                           score_scale,100)
             illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+            clsList[[length(clsList)+1]] <- dataset$class[i]
+            
           # }
           
         }else 
@@ -2269,17 +2523,31 @@ conversionGS <- function(dataset, searchDist)
           # num <-min(bbox[3]-bbox[1],bbox[4]-bbox[2])
           # den <-max(bbox[3]-bbox[1],bbox[4]-bbox[2])
           # dst <- num/den
+          # if (i == 33)
+          # {
+            # print("We here my lords, uncontainable")
+          # }
           
           
           if ((grepl("Greenspace", dataset$class[i]) | 
-               grepl("Forest", dataset$design[i]) | 
                grepl("Trees", dataset$design[i]) | 
                grepl("shrubs", dataset$design[i], ignore.case=TRUE)) &
-              !grepl("wadi", dataset$design[i], ignore.case=TRUE) &
-              grepl("Permeable", nearbyPolData$design[j]) & (ar > 25) )#& 
+              !grepl("bioswale", dataset$design[i], ignore.case=TRUE) &
+              !grepl("Forest", dataset$design[i]) &
+              (grepl("Permeable", nearbyPolData$design[j]) | 
+               grepl("Forest",nearbyPolData$design[j]) | 
+               grepl("bioswale", dataset$design[i], ignore.case=TRUE)) 
+              & (ar > 25) )#& 
               # num > 2)
           {
             inDesign <- "Rain Garden" 
+            
+            # if (i == 33)
+            # {
+              print("We here my lords, uncontainable RAIN GARDENS")
+            # }
+            
+            
             geoNV <-try(defineEdge(x_np=nearbyPolData$nearestPointsX[j],
                              y_np=nearbyPolData$nearestPointsY[j], 
                              bisectVect=gsGeo, 
@@ -2310,14 +2578,16 @@ conversionGS <- function(dataset, searchDist)
               gsScoreList[[length(gsScoreList)+1]] <- min(nearbyPolData$scores[j] * 
                                                             score_scale,100)
               illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+              clsList[[length(clsList)+1]] <- dataset$class[i]
+              
             # }
 
             
             
           } else if (nearbyPolData$priority[j] > dataset$priority[i])
           {
-            if (!grepl(dataset$design[i], "Trees, plants, and/or shrubs") | 
-                !grepl(dataset$design[i], "Wadi and shrubs"))
+            if (!grepl("Trees, plants, and/or shrubs", dataset$design[i]) | 
+                !grepl("Bioswale", dataset$design[i],ignore.case=TRUE))
             {
               w <- dataset$gsWidth[i] 
             } else
@@ -2350,7 +2620,7 @@ conversionGS <- function(dataset, searchDist)
             {
               next
             }
-            
+
             # for (l in 1:length(geoN$geometry))
             # {
               dsgList[[length(dsgList)+1]] <- nearbyPolData$design[j]
@@ -2359,6 +2629,8 @@ conversionGS <- function(dataset, searchDist)
               gsScoreList[[length(gsScoreList)+1]] <- min(nearbyPolData$scores[j] * 
                                                             score_scale,100)
               illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+              clsList[[length(clsList)+1]] <- dataset$class[i]
+              
             # }
             
             
@@ -2375,10 +2647,10 @@ conversionGS <- function(dataset, searchDist)
         }
       } else if (grepl("Edge", dataset$interventionType[i])) # define params for different "Edge" cases
       {
-        print("Generating greenspace edge")
-        
-        if (grepl("Building",dataset$class[i]) & (j == 1))
+
+        if ((grepl("Building",dataset$class[i]) | grepl("Parking",dataset$class[i])) & (j == 1))
         {
+          # gsGeoConv <- as.lines(gsGeo)
           geoNV <- buffer(gsGeo, dataset$gsWidth[i])
           geoN <- st_as_sf(geoNV)
           if (length(geoN$geometry) == 0)
@@ -2393,37 +2665,64 @@ conversionGS <- function(dataset, searchDist)
             gsList[length(gsList)+1] <- geoN$geometry#[l]
             gsScoreList[[length(gsScoreList)+1]] <- dataset$scores[i]
             illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+            clsList[[length(clsList)+1]] <- dataset$class[i]
+            
           # }
           
           # geoN <- geoN$geometry
 
-        }
-        if ((grepl("lokale weg",dataset$roadType[i]) |
-            grepl("hoofdweg",dataset$roadType[i]) |
-            grepl("regionale weg",dataset$roadType[i]) ) &
-            (!grepl("lokale weg",nearbyPolData$details[j]) |
-             !grepl("hoofdweg",nearbyPolData$details[j]) |
-             !grepl("regionale weg",nearbyPolData$details[j]) )&
-             grepl("fietsers",nearbyPolData$details[j]))
+        } #TODO FIXME
+        
+        if (grepl("road",dataset$class[i]))
         {
-          nearbyPolData$design[j] <- "Shrubs"
-        } else if ((grepl("lokale weg",nearbyPolData$details[j]) |
-                    grepl("hoofdweg",nearbyPolData$details[j]) |
-                    grepl("regionale weg",nearbyPolData$details[j]) ) &
-                   (!grepl("lokale weg",dataset$roadType[i]) |
-                    !grepl("hoofdweg",dataset$roadType[i]) |
-                    !grepl("regionale weg",dataset$roadType[i]) )&
-                   grepl("fietsers",dataset$trafficType[i]))
-        {
-          nearbyPolData$design[j] <- "Wadi"
-          
+          if (grepl("verkeer",dataset$trafficType[i]) &#"lokale weg",dataset$roadType[i]) |
+              # !grepl("bus",dataset$trafficType[i]) &
+              # grepl("regionale weg",dataset$roadType[i]) ) &
+              (grepl("fietsers",nearbyPolData$details[j]) | 
+               !grepl("verkeer",nearbyPolData$details[j])))
+          {
+            
+            # print("Road near bikes")
+            
+            if (!containedFlg)
+            {
+              nearbyPolData$design[j] <- "Trees, plants, and/or shrubs"  
+            } else
+            {
+              nearbyPolData$design[j] <- "None"
+              next
+            }
+            
+          } else if (#grepl("lokale weg",nearbyPolData$details[j]) |
+                     #grepl("hoofdweg",nearbyPolData$details[j]) |
+                     #grepl("regionale weg",nearbyPolData$details[j]) ) &
+                     # (!grepl("lokale weg",dataset$roadType[i]) |
+                     #  !grepl("hoofdweg",dataset$roadType[i]) |
+                     #  !grepl("regionale weg",dataset$roadType[i]) )&
+                     grepl("fietsers",dataset$trafficType[i]) & 
+                     !grepl("verkeer",dataset$trafficType[i]))
+          {
+            # print("Bike near road")
+            
+            if (!containedFlg)
+            {
+              nearbyPolData$design[j] <- "Bioswale"
+              
+            } else
+            {
+              nearbyPolData$design[j] <- "None"
+              next
+            }
+            
+          }
         }
+
         
         geoNV<-try(defineEdge(x_np=nearbyPolData$nearestPointsX[j], 
                              y_np=nearbyPolData$nearestPointsY[j], bisectVect=gsGeo, 
                              priority=nearbyPolData$priority[j], doubleProp=0.4, dist=nearbyPolData$distFromPoly[j], 
                              maxD=5, width=dataset$gsWidth[i], onlyLongest=onlyLong, full=full, sidePref=0, 
-                             yside=0, xside=0, onlyOuter = onlyOuter))
+                             yside=0, xside=0, onlyOuter = onlyOuter, onlyInner = onlyIn))
         
         if(inherits(geoNV, "try-error"))
         {
@@ -2448,6 +2747,8 @@ conversionGS <- function(dataset, searchDist)
           gsScoreList[[length(gsScoreList)+1]] <- min(nearbyPolData$scores[j] * 
                                                         score_scale,100)
           illegalL[[length(illegalL)+1]] <- dataset$illegal_gs[i]
+          clsList[[length(clsList)+1]] <- dataset$class[i]
+          
         # }
         
       }
@@ -2462,7 +2763,8 @@ conversionGS <- function(dataset, searchDist)
     }
   }
   greenspace_sf <- st_sf(design=unlist(dsgList),priority=unlist(priorList),
-                         scores=unlist(gsScoreList), illegal_gs=unlist(illegalL),geometry=gsList)
+                         scores=unlist(gsScoreList),illegal_gs=unlist(illegalL),
+                         class=unlist(clsList),geometry=gsList)
   
   return(greenspace_sf)
 }
@@ -2500,23 +2802,29 @@ rastVect <- function(vectIn, res=0.125)
 # for (i in 1:length(sf_gs_genList))
 # {
 #   greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(sf_gs_genList[[i]], genWidthList[[i]])
-# }
 
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(trees_sf, genWidthList[[1]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(sewers_system_sf, genWidthList[[2]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(green_percent_private_sf, genWidthList[[3]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(green_percent_public_sf, genWidthList[[4]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(green_areas_sf, genWidthList[[5]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(mv_lines_sf, genWidthList[[6]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(openWater_sf, genWidthList[[7]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(waterlines_sf, genWidthList[[8]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(roads_sf, genWidthList[[9]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(osmParking_sf, genWidthList[[10]])
-# greenSpaceGeneratorOut[[length(greenSpaceGeneratorOut)+1]] <- conversionGS(buildings_sf, genWidthList[[11]])
+# 
+# treesOut_sf <- conversionGS(trees_sf, 5)
+# sewers_systemOut_sf <- conversionGS(sewers_system_sf, 5)
+# # green_percent_privateOut_sf <- conversionGS(green_percent_private_sf, 5)
+# # green_percent_publicOut_sf <- conversionGS(green_percent_public_sf, 5)
+# green_areasOut_sf <- conversionGS(green_areas_sf, 5)
+# mv_linesOut_sf <- conversionGS(mv_lines_sf, 5)
+# openWaterOut_sf <- conversionGS(openWater_sf, 5)
+# waterlinesOut_sf <- conversionGS(waterlines_sf, 5)
+# roadsOut_sf <- conversionGS(roads_sf[23:45,], 5)
+# osmParkingOut_sf <- conversionGS(osmParking_sf, 5)
+# buildingsOut_sf <- conversionGS(buildings_sf[120:125,], 5)
+# 
+# tstGS <- bind_rows(treesOut_sf, sewers_systemOut_sf, 
+#                    green_percent_privateOut_sf, green_percent_publicOut_sf, 
+#                    green_areasOut_sf, mv_linesOut_sf, roadsOut_sf, osmParkingOut_sf, buildingsOut_sf)
 
+# tstGS <- conversionGS(sf_gs_gen, 5)
+# tstGS <- st_set_crs(tstGS, st_crs(green_areas))
 
-tstGS <- conversionGS(sf_gs_gen, 5)
-tstGS <- st_set_crs(tstGS, st_crs(green_areas))
+my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\V5" 
+
 
 
 green_percent_private_V_masked <- mask(green_percent_private_V, osmBuildingMaskV)#osmRoadsBufferV)
@@ -2542,21 +2850,79 @@ roadMask_sf <- st_as_sf(roadMaskV)
 roadMask_sf <- st_set_crs(roadMask_sf, st_crs(green_areas))
 
 
-my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\V5" 
+my_dir = "C:\\Users\\alek-\\Documents\\Wageningen Period 5\\Planning and Design of Urban Spaces\\Project Data\\Final Map Out Public Property" 
 setwd(my_dir)
 
-tstGS_mod <- tstGS
-tstGS_mod <- tstGS_mod %>% add_row(design=green_pct_private_masked_sf$design,
-                      priority=green_pct_private_masked_sf$priority,
-                      scores=green_pct_private_masked_sf$scores,
-                      illegal_gs=green_pct_private_masked_sf$illegal_gs,
-                      geometry=green_pct_private_masked_sf$geometry)
 
-tstGS_mod <- tstGS_mod %>% add_row(design=green_pct_public_masked_sf$design,
-                      priority=green_pct_public_masked_sf$priority,
-                      scores=green_pct_public_masked_sf$scores,
-                      illegal_gs=green_pct_public_masked_sf$illegal_gs,
-                      geometry=green_pct_public_masked_sf$geometry)
+mapOutV5 <- st_read("Greenspace_generation_all_v5.shp") 
+
+classGroupList <- list()
+updatedDesignList <- list()
+
+for (i in 1:length(mapOutV5$geometry))
+{
+  if (grepl("tiled",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- "Remove tiled garden"
+    classGroupList[[length(classGroupList) + 1]] <- "Recreation & Garden greenery"
+  } else if(grepl("Rain Garden",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- mapOutV5$design[i]
+    classGroupList[[length(classGroupList) + 1]] <- "Green for water infiltration"
+  }else if(grepl("Green façades",mapOutV5$design[i]) | grepl("roof",mapOutV5$design[i]) | grepl("Garden",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- mapOutV5$design[i]
+    classGroupList[[length(classGroupList) + 1]] <- "Recreation & Garden greenery"
+  }else if(grepl("Wadi",mapOutV5$design[i]) & !grepl("shrubs",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- "Bioswale"
+    classGroupList[[length(classGroupList) + 1]] <- "Green for water infiltration"
+  }else if(grepl("Wadi",mapOutV5$design[i]) & grepl("shrubs",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- "Bioswale and shrubs"
+    classGroupList[[length(classGroupList) + 1]] <- "Green for water infiltration"
+  } else if(grepl("Shallow",mapOutV5$design[i]) |
+            grepl("Trees",mapOutV5$design[i]) | 
+            grepl("Shrubs",mapOutV5$design[i]) | grepl("Forest",mapOutV5$design[i]))
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- mapOutV5$design[i]
+    classGroupList[[length(classGroupList) + 1]] <- "Enhancing quantitative & qualitative greenery"
+    
+  } else if(grepl("Permeable",mapOutV5$design[i]))
+  {
+  updatedDesignList[[length(updatedDesignList) + 1]] <- mapOutV5$design[i]
+  classGroupList[[length(classGroupList) + 1]] <- "Pavement into green"
+  
+  } else
+  {
+    updatedDesignList[[length(updatedDesignList) + 1]] <- "None"
+    classGroupList[[length(classGroupList) + 1]] <- "None"
+  }
+}
+
+# use for masking but nothing else
+
+gsMapOut_sf <- st_sf(design=unlist(updatedDesignList), classGroup=unlist(classGroupList),priority=mapOutV5$priority,
+                     scores=mapOutV5$scores, illegal_gs=mapOutV5$illegal_gs, geometry=mapOutV5$geometry)
+gsMapOut_sf <- st_set_crs(gsMapOut_sf, st_crs(green_areas))
+
+
+# waterIngil <- 
+
+# tstGS_mod <- tstGS
+# tstGS_mod <- tstGS_mod %>% add_row(design=green_pct_private_masked_sf$design,
+#                       priority=green_pct_private_masked_sf$priority,
+#                       scores=green_pct_private_masked_sf$scores,
+#                       illegal_gs=green_pct_private_masked_sf$illegal_gs,
+#                       class=green_pct_private_masked_sf$class,
+#                       geometry=green_pct_private_masked_sf$geometry)
+# 
+# tstGS_mod <- tstGS_mod %>% add_row(design=green_pct_public_masked_sf$design,
+#                       priority=green_pct_public_masked_sf$priority,
+#                       scores=green_pct_public_masked_sf$scores,
+#                       illegal_gs=green_pct_public_masked_sf$illegal_gs,
+#                       class=green_pct_public_masked_sf$class,
+#                       geometry=green_pct_public_masked_sf$geometry)
 
 # tstGS_mod <- tstGS_mod %>% add_row(design=roadAdditions_sf$design,
 #                       priority=roadAdditions_sf$priority,
@@ -2565,18 +2931,22 @@ tstGS_mod <- tstGS_mod %>% add_row(design=green_pct_public_masked_sf$design,
 #                       geometry=roadAdditions_sf$geometry)
 
 
-tstGS_modV <- vect(tstGS_mod)
-crs(tstGS_modV) <- convCRS
+gsMapOut_V <- vect(gsMapOut_sf)
+crs(gsMapOut_V) <- convCRS
 
 
 # 
 # tstGS_modV_waterBodiesMask <- mask(tstGS_modV, openWater_V, inverse=TRUE)
 # crs(tstGS_modV_waterBodiesMask) <- convCRS
 
-gsGenAll <- tstGS_modV
+gsGenAll <- gsMapOut_V
 
 gsGenAllSorted <- gsGenAll %>% arrange(desc(priority))#sort(gsGenAll, priority, decreasing=TRUE)
 gsGenAllRast <- rastVect(gsGenAllSorted)
+
+gsGenAllNoneMasked <- gsGenAllSorted
+gsGenAllNoneMasked[gsGenAllNoneMasked$design == "None"] <- NA
+gsGenAllSorted <- mask(gsGenAllSorted, gsGenAllNoneMasked)#, inverse=TRUE)
 
 
 roadMaskRast <- rasterize(roadMaskV, gsGenAllRast, getCover=TRUE)
@@ -2588,10 +2958,12 @@ gsGenAllRastNoneMasked <- gsGenAllRast
 gsGenAllRastNoneMasked[gsGenAllRastNoneMasked$design == "None"] <- NA
 gsGenAllRastMask <- mask(gsGenAllRast, gsGenAllRastNoneMasked)#, inverse=TRUE)
 
+# genVect <- as.vector(gsGenAllRastMask)
 
-writeVector(gsGenAllSorted,"Greenspace_generation_all_v5.shp", overwrite=TRUE)
-writeVector(gsGenAllSorted,"Greenspace_generation_all_v5.gpkg", overwrite=TRUE)
-writeRaster(gsGenAllRastMask, "Greenspace_generation_all_v5.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
+
+writeVector(gsGenAllSorted,"Greenspace_generation_FinalMapOut.shp", overwrite=TRUE)
+writeVector(gsGenAllSorted,"Greenspace_generation_FinalMapOut.gpkg", overwrite=TRUE)
+# writeRaster(gsGenAllRastMask, "Greenspace_generation_all_v7.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
 
 
 # gsGenAllWaterMasked <- tstGS_modV_waterBodiesMask
@@ -2608,9 +2980,9 @@ gsGenPrivateRastNoneMasked <- gsGenPrivateRast
 gsGenPrivateRastNoneMasked[gsGenPrivateRastNoneMasked$design == "None"] <- NA
 gsGenPrivateRastMask <- mask(gsGenPrivateRast, gsGenPrivateRastNoneMasked)#, inverse=TRUE)
 
-writeVector(gsGenPrivate,"Greenspace_generation_private_v5.shp", overwrite=TRUE)
-writeVector(gsGenPrivate,"Greenspace_generation_private_v5.gpkg", overwrite=TRUE)
-writeRaster(gsGenPrivateRastMask, "Greenspace_generation_private_v5.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
+writeVector(gsGenPrivate,"Greenspace_generation_private_FinalMapOut.shp", overwrite=TRUE)
+writeVector(gsGenPrivate,"Greenspace_generation_private_FinalMapOut.gpkg", overwrite=TRUE)
+# writeRaster(gsGenPrivateRastMask, "Greenspace_generation_private_v7.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
 
 gsGenPublic <- mask(gsGenAllSorted,green_percent_public_V)
 gsGenPublicRast <- rastVect(gsGenPublic)
@@ -2619,9 +2991,58 @@ gsGenPublicRastNoneMasked <- gsGenPublicRast
 gsGenPublicRastNoneMasked[gsGenPublicRastNoneMasked$design == "None"] <- NA
 gsGenPublicRastMask <- mask(gsGenPublicRast, gsGenPublicRastNoneMasked)#, inverse=TRUE)
 
-writeVector(gsGenPublic,"Greenspace_generation_public_v5.shp", overwrite=TRUE)
-writeVector(gsGenPublic,"Greenspace_generation_public_v5.gpkg", overwrite=TRUE)
-writeRaster(gsGenPublicRastMask, "Greenspace_generation_public_v5.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
+writeVector(gsGenPublic,"Greenspace_generation_public_FinalMapOut.shp", overwrite=TRUE)
+writeVector(gsGenPublic,"Greenspace_generation_public_FinalMapOut.gpkg", overwrite=TRUE)
+# writeRaster(gsGenPublicRastMask, "Greenspace_generation_public_v7.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
+
+
+
+
+colWater <- brewer.pal(9, "Blues")[6:9]
+pal <- colorRampPalette(colWater)
+colEnhance <- brewer.pal(9, "Greens")[3:9]
+pal2 <- colorRampPalette(colEnhance)
+colRecGreen <- brewer.pal(9, "GnBu")[2:6]
+pal3 <- colorRampPalette(colRecGreen)
+colPave <- brewer.pal(9, "Oranges")[1]
+pal4 <- colorRampPalette(colPave)
+colNon <- brewer.pal(9, "Greys")[5]
+pal5 <- colorRampPalette(colPave)
+rastOut <- aggregate(gsGenAllRastMask, fact=4)
+
+col <- c("darkgreen", "darkblue", "grey", "orange", "lightgreen")
+greenGenMap <- mapView(gsGenAllSorted, zcol="classGroup", burst=TRUE, col.regions=col)
+
+recAreas <- st_sf(recArea=osmRecAreas$fclass, geometry=osmRecAreas$geometry)
+
+recAreasV<- vect(recAreas)
+colRecc <- brewer.pal(7, "Pastel2")
+pal6 <- colorRampPalette(colRecc)
+
+recAreasMap <- mapView(recAreasV, col.regions=pal6(7))
+# plot(osmRecAreas$geometry)
+
+
+colRec <- brewer.pal(9, "Oranges")[1]
+paa5 <- colorRampPalette(colEnhance)
+
+suit = mapView(normalizedScores, col.regions = pal, layer.name="Suitability Score")
+roadsMap = mapView(raster_list$roads$roadType, layer.name="Road types")
+greenSpace = mapView(raster_list$`green areas`$scores, col.regions = pal2(10),
+                     layer.name="Greenspace")#alpha.regions = 0.5, alpha = 1, layer.name="Greenspace")
+greenspace_percent_private = mapView(raster_list$`private greenspace percentage`$Percentage, col.regions = pal2(10),
+                                     layer.name="Private Greenspace percentage")#alpha.regions = 0.5, alpha = 1, layer.name="Private Greenspace percentage")
+greenspace_percent_public = mapView(raster_list$`public greenspace percentage`$Percentage, col.regions = pal2(10),
+                                    layer.name="Public Greenspace percentage")#alpha.regions = 0.5, alpha = 1, layer.name="Public Greenspace percentage")
+treesMap = mapView(trees_shp)
+buildingsMap = mapView(raster_list$buildings$buildingType, na.rm=TRUE)
+
+suit + greenSpace + greenspace_percent_private + treesMap + greenspace_percent_public + roadsMap + buildingsMap
+
+
+
+
+
 
 # gsGenAllMerge <- merge(gsGenPrivate, gsGenPublic)
 # gsGenAllMergeRast <- rastVect(gsGenAllMerge)
@@ -2679,6 +3100,16 @@ writeRaster(gsGenPublicRastMask, "Greenspace_generation_public_v5.tif", overwrit
 # writeVector(gsGenAndOldPublic,"Greenspace_generation_and_old_public_v5.gpkg", overwrite=TRUE)
 # writeRaster(gsGenAndOldPublicRastMask, "Greenspace_generation_and_old_public_v5.tif", overwrite=TRUE, gdal=c("COMPRESS=NONE", "TFW=YES"), datatype='INT1U')
 # 
+
+
+
+
+
+
+#look at soil map data and see if you can glean anything from that
+# locateTreePlacement <- function (greenspace_sf)
+
+
 
 # tsGSV <- vect(tstGS)
 # crs(tsGSV) <- convCRS
@@ -3550,7 +3981,7 @@ prGS + pbGS
 
 #Thursday
 #Interventions
-# if near road, suggest polygon split to 50% wadi, 50%shrub/bushes (closer to road)
+# if near road, suggest polygon split to 50% Bioswale, 50%shrub/bushes (closer to road)
 # else if near permeable pavement and in greenspace, suggest rain garden
 # 
 
