@@ -1,3 +1,10 @@
+# Wageningen University and Research 
+# Course: Planning and Design of Urban Space (ETE33806)
+# Project: A Green Network Through De Buurt, Wageningen 
+# Group #: 7
+# Author: Alek Gerard-Ursin
+
+
 ## ---- Data Loading
 # check if needed packages are installed
 packages <- c("terra", "sf", "plyr", "mapaccuracy", "sampling", "sp", "mapview",
